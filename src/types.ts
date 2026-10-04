@@ -4,6 +4,8 @@ export type InputLanguageSetting = 'auto' | 'kn' | 'hi' | 'en';
 
 export type ViewMode = 
   | 'voice-agent' 
+  | 'gemini-live'
+  | 'gemini-chatbot'
   | 'document-scanner' 
   | 'my-deadlines' 
   | 'legal-rights' 

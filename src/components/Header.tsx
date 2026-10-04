@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ViewMode, Language } from '../types';
+import { DevicePermissionsToggle } from './DevicePermissionsToggle';
 
 interface HeaderProps {
   currentView: ViewMode;
@@ -134,6 +135,11 @@ export const Header: React.FC<HeaderProps> = ({
               {currentView === 'mobile-app' ? 'Workstation' : 'Mobile App'}
             </span>
           </button>
+
+          {/* Inline Device Access (Camera & Microphone) Toggles */}
+          <div className="hidden lg:flex items-center">
+            <DevicePermissionsToggle compact language={language} />
+          </div>
 
           {/* Language Switcher Strip */}
           <div className="hidden sm:flex items-center border-2 border-[#1a1a1a] bg-[#e8e3da] p-0.5">

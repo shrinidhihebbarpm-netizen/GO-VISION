@@ -135,6 +135,53 @@ export const SystemHealthView: React.FC<SystemHealthViewProps> = ({
         </div>
       </div>
 
+      {/* Module 4: Device Permissions Diagnostic Card */}
+      <div className="bg-[#ffffff] border-2 border-[#1a1a1a] bauhaus-shadow p-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between pb-3 border-b-2 border-[#1a1a1a]">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#0055ff] text-[20px]">lock_open</span>
+            <h2 className="font-['Space_Grotesk'] text-base font-bold uppercase text-[#1a1a1a]">
+              Hardware Device Access (Camera &amp; Microphone)
+            </h2>
+          </div>
+          <span className="px-2 py-0.5 bg-[#0055ff] text-white text-xs font-bold uppercase font-['Space_Grotesk']">
+            Web Standard Permissions
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 bg-[#f8f7f4] border-2 border-[#1a1a1a] flex flex-col justify-between gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#0055ff]">photo_camera</span>
+                <span className="font-['Space_Grotesk'] font-bold text-sm uppercase">Camera Intake (OCR)</span>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-[#1a1a1a] text-[10px] font-mono font-bold uppercase">
+                Dynamic Prompt
+              </span>
+            </div>
+            <p className="text-xs text-[#4a4a4a] leading-relaxed">
+              Used strictly on-demand for capturing official municipal notices, property tax demands, and court summons for limitation analysis.
+            </p>
+          </div>
+
+          <div className="p-4 bg-[#f8f7f4] border-2 border-[#1a1a1a] flex flex-col justify-between gap-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#e63b2e]">mic</span>
+                <span className="font-['Space_Grotesk'] font-bold text-sm uppercase">Microphone Voice Input</span>
+              </div>
+              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-[#1a1a1a] text-[10px] font-mono font-bold uppercase">
+                Dynamic Prompt
+              </span>
+            </div>
+            <p className="text-xs text-[#4a4a4a] leading-relaxed">
+              Enables hands-free conversational queries in Kannada, Hindi, and English with auto-language detection.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Air-Gap Diagnostic Action Card */}
       <div className="bg-[#ffffff] border-2 border-[#1a1a1a] bauhaus-shadow p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between pb-3 border-b-2 border-[#1a1a1a]">

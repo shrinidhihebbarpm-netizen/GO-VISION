@@ -8,6 +8,8 @@ import { ScannerModal } from './components/ScannerModal';
 import { RectificationModal } from './components/RectificationModal';
 import { ResponseDraftModal } from './components/ResponseDraftModal';
 import { DocumentCameraScanner } from './components/DocumentCameraScanner';
+import { DevicePermissionsToggle } from './components/DevicePermissionsToggle';
+import { permissionManager } from './utils/permissionManager';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('voice-agent');
@@ -963,7 +965,6 @@ export default function App() {
 
           const docTitle = currentLang === 'kn' ? (enrichedNotice.titleKn || enrichedNotice.title) : currentLang === 'hi' ? (enrichedNotice.titleHi || enrichedNotice.title) : (enrichedNotice.titleEn || enrichedNotice.title);
           const docDept = currentLang === 'kn' ? (enrichedNotice.departmentKn || enrichedNotice.department) : currentLang === 'hi' ? (enrichedNotice.departmentHi || enrichedNotice.department) : enrichedNotice.department;
-          const primarySummary = currentLang === 'kn' ? (enrichedNotice.plainSummary.kn || enrichedNotice.plainSummary.en) : currentLang === 'hi' ? (enrichedNotice.plainSummary.hi || enrichedNotice.plainSummary.en) : enrichedNotice.plainSummary.en;
 
           const knDeadlinePhrase = hasNoDueDate
             ? 'ಯಾವುದೇ ಅಂತಿಮ ಗಡುವನ್ನು ನಮೂದಿಸಲಾಗಿಲ್ಲ (ಮಾಹಿತಿ ಉದ್ದೇಶದ ದಾಖಲೆ)'
@@ -983,6 +984,12 @@ export default function App() {
             ? `Statutory due date passed on ${properDeadline} (${daysOverdue} days overdue)`
             : `Statutory deadline is ${properDeadline} (${daysRemaining} days remaining)`;
 
+          const primarySummary = currentLang === 'kn'
+            ? `ದಾಖಲೆ '${docTitle}' ಯಶಸ್ವಿಯಾಗಿ ಓದಲಾಗಿದೆ ಮತ್ತು ವಿಶ್ಲೇಷಿಸಲಾಗಿದೆ. ${docDept} ನೀಡಿದ ಈ ನೋಟಿಸ್‌ಗೆ ${knDeadlinePhrase}. ${enrichedNotice.plainSummary.kn || enrichedNotice.plainSummary.en}`
+            : currentLang === 'hi'
+            ? `दस्तावेज '${docTitle}' का सफलतापूर्वक अध्ययन किया गया। ${docDept} द्वारा जारी इस नोटिस की ${hiDeadlinePhrase}। ${enrichedNotice.plainSummary.hi || enrichedNotice.plainSummary.en}`
+            : `Neatly analyzed document '${docTitle}'. Issued by ${docDept}. ${enDeadlinePhrase}. ${enrichedNotice.plainSummary.en}`;
+
           const isExpiring = !hasNoDueDate && !isOverdue && daysRemaining !== null && daysRemaining <= 7;
 
           const assistantTurn: ConversationTurn = {
@@ -994,7 +1001,7 @@ export default function App() {
             hindiText: `दस्तावेज '${docTitle}' का सफलतापूर्वक अध्ययन किया गया। ${docDept} द्वारा जारी इस नोटिस की ${hiDeadlinePhrase}। ${enrichedNotice.plainSummary.hi || enrichedNotice.plainSummary.en}`,
             englishText: `Neatly analyzed document '${docTitle}'. Issued by ${docDept}. ${enDeadlinePhrase}. ${enrichedNotice.plainSummary.en}`,
             detectedLanguage: currentLang,
-            laymanSummary: enrichedNotice.laymanSummary?.en || (hasNoDueDate ? 'In plain words: No deadline is mentioned in this document. It is informational.' : isOverdue ? `In plain words: The statutory deadline passed on ${properDeadline}. Respond immediately to avoid additional penalties.` : `In plain words: The notice requires action by ${properDeadline}. Do not ignore it to prevent penalty charges.`),
+            laymanSummary: currentLang === 'kn' ? (enrichedNotice.laymanSummary?.kn || enrichedNotice.laymanSummary?.en) : currentLang === 'hi' ? (enrichedNotice.laymanSummary?.hi || enrichedNotice.laymanSummary?.en) : (enrichedNotice.laymanSummary?.en || enrichedNotice.plainSummary.en),
             laymanSummaryKn: enrichedNotice.laymanSummary?.kn || (hasNoDueDate ? 'ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ದಾಖಲೆಯಲ್ಲಿ ಯಾವುದೇ ಅಂತಿಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಲಾಗಿಲ್ಲ. ಇದು ಮಾಹಿತಿ ಉದ್ದೇಶದ ದಾಖಲೆಯಾಗಿದೆ.' : isOverdue ? `ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ನೋಟಿಸ್‌ನ ಅಂತಿಮ ಗಡುವು ${properDeadlineKn} ರಂದು ಮೀರಿದೆ. ದಂಡ ತಪ್ಪಿಸಲು ತುರ್ತಾಗಿ ಉತ್ತರಿಸಿ.` : `ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ನೋಟಿಸ್‌ಗೆ ${properDeadlineKn} ರೊಳಗೆ ಉತ್ತರಿಸಬೇಕು. ಹೆಚ್ಚುವರಿ ದಂಡವನ್ನು ತಪ್ಪಿಸಲು ಸಕಾಲದಲ್ಲಿ ಕ್ರಮ ಕೈಗೊಳ್ಳಿ.`),
             laymanSummaryHi: enrichedNotice.laymanSummary?.hi || (hasNoDueDate ? 'साधारण शब्दों में: इस दस्तावेज में कोई देय तिथि उल्लिखित नहीं है। यह केवल एक सूचनात्मक रिकॉर्ड है।' : isOverdue ? `साधारण शब्दों में: इस नोटिस की देय तिथि ${properDeadlineHi} को समाप्त हो चुकी है। अतिरिक्त जुर्माने से बचने के लिए तुरंत जवाब दें।` : `साधारण शब्दों में: इस नोटिस का अनुपालन ${properDeadlineHi} तक करना आवश्यक है ताकि जुर्माने से बचा जा सके।`),
             laymanSummaryEn: enrichedNotice.laymanSummary?.en || (hasNoDueDate ? 'In plain words: No deadline is mentioned in this document. It is informational.' : isOverdue ? `In plain words: The statutory deadline passed on ${properDeadline}. Respond immediately to avoid additional penalties.` : `In plain words: The notice requires action by ${properDeadline}. Do not ignore it to prevent penalty charges.`),

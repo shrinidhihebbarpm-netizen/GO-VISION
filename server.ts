@@ -1,12 +1,118 @@
 import express from 'express';
+import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 
 dotenv.config();
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
+const server = http.createServer(app);
+
+// WebSocket Server for Gemini 3.8 Live API real-time voice streaming
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  const { pathname } = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
+  if (pathname === '/live' || pathname === '/api/live') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  }
+});
+
+wss.on('connection', async (clientWs: WebSocket) => {
+  console.log('Gemini 3.8 Live API WebSocket client connected');
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+  
+  if (!apiKey) {
+    clientWs.send(JSON.stringify({ 
+      type: 'error', 
+      error: 'GEMINI_API_KEY is not configured in server environment.' 
+    }));
+    clientWs.close();
+    return;
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  let session: any = null;
+
+  try {
+    session = await ai.live.connect({
+      model: 'gemini-3.8-live',
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
+        },
+        systemInstruction: 'You are Go Vision Live, an intelligent, empathetic civic and legal assistant helping citizens understand statutory notices, limitation periods, and rights in real-time. Keep responses concise, clear, and conversational in English, Kannada, or Hindi.',
+      },
+      callbacks: {
+        onmessage: (message: LiveServerMessage) => {
+          const audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+          const textPart = message.serverContent?.modelTurn?.parts?.find((p: any) => p.text)?.text;
+          if (audio) {
+            clientWs.send(JSON.stringify({ type: 'audio', audio, text: textPart }));
+          } else if (textPart) {
+            clientWs.send(JSON.stringify({ type: 'text', text: textPart }));
+          }
+          if (message.serverContent?.interrupted) {
+            clientWs.send(JSON.stringify({ type: 'interrupted', interrupted: true }));
+          }
+          if (message.serverContent?.turnComplete) {
+            clientWs.send(JSON.stringify({ type: 'turnComplete' }));
+          }
+        },
+        onerror: (err: any) => {
+          console.error('Live API Session error:', err);
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify({ type: 'error', error: err.message || 'Live session error' }));
+          }
+        },
+        onclose: () => {
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(JSON.stringify({ type: 'closed' }));
+          }
+        }
+      },
+    });
+
+    clientWs.send(JSON.stringify({ type: 'ready', message: 'Connected to Gemini 3.8 Live API voice session.' }));
+  } catch (err: any) {
+    console.error('Failed to establish Live session:', err);
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(JSON.stringify({ type: 'error', error: 'Live API connection error: ' + (err.message || err) }));
+    }
+    return;
+  }
+
+  clientWs.on('message', async (data: any) => {
+    try {
+      const parsed = JSON.parse(data.toString());
+      if (parsed.type === 'audio' && parsed.audio && session) {
+        session.sendRealtimeInput({
+          audio: { data: parsed.audio, mimeType: 'audio/pcm;rate=16000' },
+        });
+      } else if (parsed.type === 'text' && parsed.text && session) {
+        session.sendRealtimeInput({
+          text: parsed.text
+        });
+      }
+    } catch (err) {
+      console.warn('Error processing client Live audio/message:', err);
+    }
+  });
+
+  clientWs.on('close', () => {
+    if (session) {
+      try {
+        session.close();
+      } catch (e) {}
+    }
+  });
+});
 
 app.use(express.json({ limit: '25mb' }));
 
@@ -755,8 +861,8 @@ Respond in strictly valid JSON matching this schema:
 
     const candidateModels = [
       'gemini-3.8-flash',
-      'gemini-flash-latest',
-      'gemini-3.1-pro-preview'
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest'
     ];
 
     let response: any = null;
@@ -792,7 +898,7 @@ Return ONLY valid JSON matching the requested schema.`
         });
         if (response && response.text) break;
       } catch (err: any) {
-        console.warn(`Scan model ${modelName} error:`, err.message);
+        console.warn(`Scan model ${modelName} encountered error or quota limitation, checking next fallback:`, err.message);
       }
     }
 
@@ -804,6 +910,14 @@ Return ONLY valid JSON matching the requested schema.`
     const cleanJson = response.text.replace(/^```json/i, '').replace(/```$/i, '').trim();
     const parsedNotice = JSON.parse(cleanJson);
     const finalNotice = evaluateNoticeDates(parsedNotice);
+
+    if (language === 'kn') {
+      if (finalNotice.titleKn) finalNotice.title = finalNotice.titleKn;
+      if (finalNotice.departmentKn) finalNotice.department = finalNotice.departmentKn;
+    } else if (language === 'hi') {
+      if (finalNotice.titleHi) finalNotice.title = finalNotice.titleHi;
+      if (finalNotice.departmentHi) finalNotice.department = finalNotice.departmentHi;
+    }
 
     return res.json({ notice: finalNotice });
   } catch (err: any) {
@@ -1106,10 +1220,9 @@ Statutory Remedy: ${documentContext.statutoryRemedy}`
     });
 
     const candidateModels = [
-      'gemma-4-31b-it',
-      'gemma-4-26b-a4b-it',
-      'gemma-3-27b-it',
-      'gemini-3.8-flash'
+      'gemini-3.8-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest'
     ];
     let response: any = null;
     let chosenModel = 'gemini-3.8-flash';
@@ -1130,7 +1243,7 @@ Statutory Remedy: ${documentContext.statutoryRemedy}`
           break;
         }
       } catch (modelErr: any) {
-        console.warn(`Model candidate ${modelName} failed or unavailable, checking next:`, modelErr.message);
+        console.warn(`Chat model candidate ${modelName} encountered issue, checking next fallback:`, modelErr.message);
       }
     }
 
@@ -1228,6 +1341,144 @@ Statutory Remedy: ${documentContext.statutoryRemedy}`
   }
 });
 
+// MULTI-TURN GEMINI CHATBOT API (gemini-3.1-pro-preview, gemini-3.5-flash, gemini-3.1-flash-lite)
+app.post('/api/gemini-chatbot', async (req, res) => {
+  try {
+    const {
+      message,
+      history = [],
+      model = 'gemini-3.5-flash',
+      role = 'Statutory Legal Advisor',
+      customSystemInstruction,
+      documentContext
+    } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    if (isUnsafeRequest(message)) {
+      return res.json({
+        response: {
+          text: "I cannot assist with unlawful evasion, forging government documents, or circumventing statutory regulations. I can assist with lawful civic procedures, verifying legitimate limitation dates, and explaining official government notices.",
+          role,
+          modelUsed: model,
+          safetyRefusal: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+    if (!apiKey) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on server' });
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Model selection with resilient fallbacks
+    let preferredModel = 'gemini-3.8-flash';
+    if (model === 'gemini-3.1-pro-preview' || model === 'pro' || model === 'complex') {
+      preferredModel = 'gemini-3.8-flash';
+    } else if (model === 'gemini-3.1-flash-lite' || model === 'fast' || model === 'lite') {
+      preferredModel = 'gemini-3.1-flash-lite';
+    } else {
+      preferredModel = 'gemini-3.8-flash';
+    }
+
+    const candidateChatModels = [
+      preferredModel,
+      'gemini-3.8-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest'
+    ];
+
+    // Role-based system instruction
+    let systemInstruction = customSystemInstruction;
+    if (!systemInstruction) {
+      switch (role) {
+        case 'Plain-Words Simplifier':
+          systemInstruction = `You are the Plain-Words Citizen Advocate. Your job is to demystify complex Indian municipal, Income Tax, GST, and court notices into crystal-clear everyday words without confusing legal jargon. Always check and clearly explain due dates (upcoming, today, or past due) and state actionable next steps. Support Kannada, Hindi, and English fluently.`;
+          break;
+        case 'Dispute & Appeal Strategist':
+          systemInstruction = `You are a Senior Dispute & Appellate Strategist specialized in Indian statutory law (Income Tax Sec 154/246A, BBMP KMC Act Sec 108A, Aadhaar Act Sec 28A, Consumer Protection Act). Provide precise, step-by-step procedural workflows for filing rectifications, filing appeals, and drafting dispute letters within limitation periods.`;
+          break;
+        case 'Rapid Triage Specialist':
+          systemInstruction = `You are a Rapid Notice Triage Specialist. Provide ultra-fast, structured breakdowns: 1) Issuing Authority, 2) Applicable Statutory Section, 3) Deadline Status (Due / Overdue / No Due Date), 4) Threat / Penalty Warning, 5) Immediate Next Actions in 3 clear bullets.`;
+          break;
+        case 'Statutory Legal Advisor':
+        default:
+          systemInstruction = `You are the Lead Statutory Legal Advisor for Go Vision. You provide authoritative, accurate, and empathetic guidance on official notices, citizen legal rights, and limitation periods across Indian municipal, tax, and civil law. Emphasize lawful remedies, due process, and clear dates.`;
+          break;
+      }
+    }
+
+    if (documentContext) {
+      const activeDoc = evaluateNoticeDates(documentContext);
+      systemInstruction += `\n\n[Active Document Context]:\n- Title: ${activeDoc.title}\n- Authority: ${activeDoc.department}\n- Ref: ${activeDoc.refNumber}\n- Issued: ${activeDoc.formattedIssueDate || activeDoc.issueDate || 'N/A'}\n- Due Date: ${activeDoc.hasNoDueDate ? 'No Due Date Specified (Informational Record)' : (activeDoc.formattedDeadline || activeDoc.deadlineDate || 'None')}\n- Status: ${activeDoc.hasNoDueDate ? 'No Due Date' : activeDoc.isOverdue ? `OVERDUE (${activeDoc.daysOverdue} days ago)` : `${activeDoc.daysRemaining} days remaining`}\n- Action Required: ${activeDoc.requiredAction?.en || JSON.stringify(activeDoc.requiredAction)}\n- Threat/Penalty: ${activeDoc.penaltyText || 'N/A'}`;
+    }
+
+    // Format multi-turn conversation history
+    const formattedContents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+    if (Array.isArray(history) && history.length > 0) {
+      for (const item of history) {
+        if (item.role === 'user' || item.role === 'model') {
+          formattedContents.push({
+            role: item.role,
+            parts: [{ text: item.text || item.content || '' }]
+          });
+        }
+      }
+    }
+
+    // Add latest user message
+    formattedContents.push({
+      role: 'user',
+      parts: [{ text: message }]
+    });
+
+    let response: any = null;
+    let actualModelUsed = preferredModel;
+
+    for (const chatModel of Array.from(new Set(candidateChatModels))) {
+      try {
+        response = await ai.models.generateContent({
+          model: chatModel,
+          contents: formattedContents,
+          config: {
+            systemInstruction,
+            temperature: 0.5,
+          }
+        });
+        if (response && response.text) {
+          actualModelUsed = chatModel;
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`Chatbot model ${chatModel} quota/error, trying fallback:`, err.message);
+      }
+    }
+
+    const replyText = response?.text || "I have analyzed your request based on statutory provisions.";
+
+    return res.json({
+      response: {
+        text: replyText,
+        modelUsed: actualModelUsed,
+        role,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    });
+  } catch (err: any) {
+    console.error('Error in /api/gemini-chatbot:', err);
+    return res.status(500).json({
+      error: 'Failed to generate response from Gemini chatbot',
+      message: err.message
+    });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -1239,8 +1490,8 @@ async function startServer() {
     app.use(express.static('dist'));
   }
 
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`Go Vision server listening on port ${port}`);
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`Go Vision server with Gemini 3.8 Live API listening on port ${port}`);
   });
 }
 
