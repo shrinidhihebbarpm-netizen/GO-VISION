@@ -1,0 +1,6 @@
+{
+  "name": "Go Vision - Offline Citizen AI",
+  "description": "Sovereign offline legal and civic notice assistant for citizen empowerment, multimodal voice queries, statutory compliance, and zero cloud transmission.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
