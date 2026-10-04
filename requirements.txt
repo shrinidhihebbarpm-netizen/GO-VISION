@@ -1,0 +1,11 @@
+# Go Vision - Offline Citizen AI
+# Python Requirements
+#
+# NOTE: The application and IDLE launcher (`main.py` & `app.py`) run 100% out of the box
+# using ONLY Python's built-in standard library (tkinter, http.server, urllib, json, threading).
+#
+# Optional packages for enhanced Google GenAI cloud integration & image processing:
+google-genai>=2.4.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
