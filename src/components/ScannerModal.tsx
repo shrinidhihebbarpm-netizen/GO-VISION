@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StatutoryNotice, Language } from '../types';
 import { MOCK_NOTICES } from '../data/mockNotices';
 import { downloadIcsFile } from '../utils/icsGenerator';
+import { formatProperDate, checkDateStatus } from '../utils/dateFormatter';
 
 interface ScannerModalProps {
   isOpen: boolean;
@@ -22,6 +23,11 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
 
   if (!isOpen) return null;
 
+  const dateStatus = checkDateStatus(selectedNotice.deadlineDate, selectedNotice.issueDate);
+  const hasNoDue = selectedNotice.hasNoDueDate || dateStatus.hasNoDueDate || !selectedNotice.deadlineDate;
+  const isOverdue = selectedNotice.isOverdue || dateStatus.isOverdue || (dateStatus.daysRemaining !== null && dateStatus.daysRemaining < 0);
+  const daysLeft = dateStatus.daysRemaining ?? selectedNotice.daysRemaining;
+
   const handleSimulateScan = (notice: StatutoryNotice) => {
     setSelectedNotice(notice);
     setIsScanning(true);
@@ -31,6 +37,7 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
   };
 
   const handleExportIcs = () => {
+    if (hasNoDue || !selectedNotice.deadlineDate) return;
     downloadIcsFile({
       title: selectedNotice.title,
       description: selectedNotice.requiredAction[language] || selectedNotice.requiredAction.en,
@@ -123,7 +130,7 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
                 <div className="space-y-2 opacity-90">
                   <div className="flex justify-between items-start border-b border-black/20 pb-1">
                     <span className="font-bold uppercase text-[#1a1a1a]">{selectedNotice.department}</span>
-                    <span className="text-[10px] text-[#4a4a4a]">DATE: {selectedNotice.issueDate}</span>
+                    <span className="text-[10px] text-[#4a4a4a]">DATE: {selectedNotice.issueDate ? formatProperDate(selectedNotice.issueDate, 'en') : 'N/A'}</span>
                   </div>
                   <p className="font-bold text-[13px] text-[#1a1a1a] uppercase leading-tight pt-1">
                     {selectedNotice.title}
@@ -131,9 +138,20 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
                   <p className="text-[11px] text-[#4a4a4a] leading-relaxed">
                     Notice under section {selectedNotice.verifiedSection}. Assessment of difference payable: {selectedNotice.amountDemanded || 'Mandatory compliance'}.
                   </p>
-                  <div className="p-2 bg-[#ffdad6] border border-[#e63b2e] text-[#e63b2e] font-bold text-[10px] uppercase">
-                    WARNING: Response required before {selectedNotice.deadlineDate} to prevent statutory penalties.
-                  </div>
+                  {hasNoDue ? (
+                    <div className="p-2 bg-[#d6e3ff] border border-[#0055ff] text-[#0055ff] font-bold text-[10px] uppercase">
+                      INFORMATION ONLY: No deadline/due date specified in this notice.
+                    </div>
+                  ) : isOverdue ? (
+                    <div className="p-2 bg-[#ffdad6] border border-[#e63b2e] text-[#e63b2e] font-bold text-[10px] uppercase flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">error</span>
+                      <span>CRITICAL: Due date {formatProperDate(selectedNotice.deadlineDate, 'en')} has PASSED ({dateStatus.daysOverdue || Math.abs(daysLeft || 0)} days overdue). Immediate rectification needed.</span>
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-[#ffdad6] border border-[#e63b2e] text-[#e63b2e] font-bold text-[10px] uppercase">
+                      WARNING: Response required before {formatProperDate(selectedNotice.deadlineDate, 'en')} ({daysLeft} days remaining).
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-black/20 flex justify-between items-center text-[10px] text-[#4a4a4a]">
@@ -171,15 +189,30 @@ export const ScannerModal: React.FC<ScannerModalProps> = ({
                   <span className="font-['Space_Grotesk'] text-sm font-bold uppercase text-[#1a1a1a]">
                     Statutory Fine Print Decoded
                   </span>
-                  <span
-                    className={`font-['Space_Grotesk'] text-xs px-2 py-0.5 border border-[#1a1a1a] font-bold uppercase ${
-                      selectedNotice.urgency === 'CRITICAL'
-                        ? 'bg-[#e63b2e] text-white'
-                        : 'bg-[#ffcc00] text-[#1a1a1a]'
-                    }`}
-                  >
-                    Due in {selectedNotice.daysRemaining} Days
-                  </span>
+                  {hasNoDue ? (
+                    <span className="font-['Space_Grotesk'] text-xs px-2 py-0.5 border border-[#1a1a1a] font-bold uppercase bg-blue-100 text-blue-950">
+                      {language === 'kn' ? 'ಯಾವುದೇ ಅಂತಿಮ ಗಡುವಿಲ್ಲ' : language === 'hi' ? 'कोई देय तिथि नहीं' : 'No Due Date'}
+                    </span>
+                  ) : isOverdue ? (
+                    <span className="font-['Space_Grotesk'] text-xs px-2 py-0.5 border border-red-800 font-bold uppercase bg-[#e63b2e] text-white flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[12px]">warning</span>
+                      {language === 'kn' ? `ಅಂತಿಮ ಗಡುವು ಮೀರಿದೆ (${dateStatus.daysOverdue || Math.abs(daysLeft || 0)} ದಿನ)` :
+                       language === 'hi' ? `समय समाप्त (${dateStatus.daysOverdue || Math.abs(daysLeft || 0)} दिन)` :
+                       `Past Due Date (${dateStatus.daysOverdue || Math.abs(daysLeft || 0)}d ago)`}
+                    </span>
+                  ) : (
+                    <span
+                      className={`font-['Space_Grotesk'] text-xs px-2 py-0.5 border border-[#1a1a1a] font-bold uppercase ${
+                        selectedNotice.urgency === 'CRITICAL'
+                          ? 'bg-[#e63b2e] text-white'
+                          : 'bg-[#ffcc00] text-[#1a1a1a]'
+                      }`}
+                    >
+                      {daysLeft === 0
+                        ? (language === 'kn' ? 'ಇಂದೇ ಕೊನೆಯ ದಿನಾಂಕ' : language === 'hi' ? 'आज ही अंतिम तिथि' : 'Due Today')
+                        : `${daysLeft} ${language === 'kn' ? 'ದಿನಗಳು ಬಾಕಿ ಇವೆ' : language === 'hi' ? 'दिन शेष' : 'Days Left'}`}
+                    </span>
+                  )}
                 </div>
 
                 {/* Multilingual Plain Words Summary */}

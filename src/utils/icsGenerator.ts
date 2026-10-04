@@ -4,11 +4,12 @@
 export function downloadIcsFile(params: {
   title: string;
   description: string;
-  dueDate: string; // YYYY-MM-DD
+  dueDate?: string | null; // YYYY-MM-DD
   noticeRef: string;
   filename?: string;
 }) {
   const { title, description, dueDate, noticeRef, filename = 'notice_demand_reminder.ics' } = params;
+  if (!dueDate) return;
   
   // Format dates: YYYYMMDD
   const cleanDate = dueDate.replace(/-/g, '');

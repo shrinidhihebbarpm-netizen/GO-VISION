@@ -733,7 +733,7 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
       {/* BEGIN: Fixed Bottom Navigation Bar */}
       <nav className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2 flex items-center justify-around z-40 text-slate-500 shadow-lg max-w-4xl mx-auto rounded-t-2xl">
         <button
-          onClick={() => onNavigateToView('home')}
+          onClick={() => onNavigateToView('voice-agent')}
           className="flex flex-col items-center group cursor-pointer"
         >
           <div className="px-4 py-1 rounded-full transition bg-blue-100 text-[#0B2568]">
