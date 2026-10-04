@@ -570,7 +570,8 @@ export default function App() {
       kannadaText: currentDetected === 'kn' ? userText.trim() : undefined,
       hindiText: currentDetected === 'hi' ? userText.trim() : undefined,
       englishText: currentDetected === 'en' ? userText.trim() : undefined,
-      detectedLanguage: currentDetected
+      detectedLanguage: currentDetected,
+      selectedDisplayLang: currentLang
     };
 
     setTurns(prev => [...prev, userTurn]);
@@ -610,6 +611,7 @@ export default function App() {
         hindiText: reply.hindiText || (finalDetectedLang === 'hi' ? reply.text : undefined),
         englishText: reply.englishText || (finalDetectedLang === 'en' ? reply.text : undefined),
         detectedLanguage: finalDetectedLang,
+        selectedDisplayLang: currentLang,
         safetyRefusal: reply.safetyRefusal,
         laymanSummary: reply.laymanSummary || activeNotice.laymanSummary?.en,
         laymanSummaryKn: reply.laymanSummaryKn || (typeof reply.laymanSummary === 'object' ? reply.laymanSummary.kn : activeNotice.laymanSummary?.kn),
@@ -775,11 +777,14 @@ export default function App() {
       kannadaText: `ನಾನು ಹೊಸ ದಾಖಲೆಯನ್ನು ಸ್ಕ್ಯಾನ್ ಮಾಡಿದ್ದೇನೆ: ${enrichedNotice.titleKn || enrichedNotice.title}`,
       hindiText: `मैंने नया दस्तावेज स्कैन किया है: ${enrichedNotice.titleHi || enrichedNotice.title}`,
       englishText: `I scanned a new document: ${enrichedNotice.titleEn || enrichedNotice.title}`,
-      detectedLanguage: currentLang
+      detectedLanguage: currentLang,
+      selectedDisplayLang: currentLang
     };
 
     const isExpiring = !hasNoDueDate && !isOverdue && daysRemaining !== null && daysRemaining <= 7;
-    const primarySummary = currentLang === 'kn' ? (enrichedNotice.plainSummary.kn || enrichedNotice.plainSummary.en) : currentLang === 'hi' ? (enrichedNotice.plainSummary.hi || enrichedNotice.plainSummary.en) : enrichedNotice.plainSummary.en;
+    const knPlain = enrichedNotice.plainSummary?.kn || (typeof enrichedNotice.plainSummary === 'string' ? enrichedNotice.plainSummary : enrichedNotice.plainSummary?.en);
+    const hiPlain = enrichedNotice.plainSummary?.hi || (typeof enrichedNotice.plainSummary === 'string' ? enrichedNotice.plainSummary : enrichedNotice.plainSummary?.en);
+    const enPlain = enrichedNotice.plainSummary?.en || (typeof enrichedNotice.plainSummary === 'string' ? enrichedNotice.plainSummary : enrichedNotice.title);
 
     const knDeadlinePhrase = hasNoDueDate
       ? 'ಯಾವುದೇ ಅಂತಿಮ ಗಡುವನ್ನು ನಮೂದಿಸಲಾಗಿಲ್ಲ (ಮಾಹಿತಿ ಉದ್ದೇಶದ ದಾಖಲೆ)'
@@ -799,20 +804,27 @@ export default function App() {
       ? `Statutory due date passed on ${properDeadline} (${daysOverdue} days overdue)`
       : `Statutory deadline is ${properDeadline} (${daysRemaining} days remaining)`;
 
+    const primarySummary = currentLang === 'kn'
+      ? `ದಾಖಲೆ '${docTitle}' ಯಶಸ್ವಿಯಾಗಿ ಪರಿಶೀಲಿಸಲಾಗಿದೆ. ${docDept} ನೀಡಿದ ಈ ನೋಟಿಸ್‌ಗೆ ${knDeadlinePhrase}. ${knPlain}`
+      : currentLang === 'hi'
+      ? `दस्तावेज '${docTitle}' का सफलतापूर्वक विश्लेषण किया गया। ${docDept} द्वारा जारी नोटिस की ${hiDeadlinePhrase}। ${hiPlain}`
+      : `Successfully analyzed the document '${docTitle}'. Issued by ${docDept}. ${enDeadlinePhrase}. ${enPlain}`;
+
     const assistantTurn: ConversationTurn = {
       id: `turn-assistant-scan-${Date.now()}`,
       type: 'assistant',
       timestamp: timeStr,
       text: primarySummary,
-      kannadaText: `ದಾಖಲೆ '${docTitle}' ಯಶಸ್ವಿಯಾಗಿ ಪರಿಶೀಲಿಸಲಾಗಿದೆ. ${docDept} ನೀಡಿದ ಈ ನೋಟಿಸ್‌ಗೆ ${knDeadlinePhrase}. ${enrichedNotice.plainSummary.kn || enrichedNotice.plainSummary.en}`,
-      hindiText: `दस्तावेज '${docTitle}' का सफलतापूर्वक विश्लेषण किया गया। ${docDept} द्वारा जारी नोटिस की ${hiDeadlinePhrase}। ${enrichedNotice.plainSummary.hi || enrichedNotice.plainSummary.en}`,
-      englishText: `Successfully analyzed the document '${docTitle}'. Issued by ${docDept}. ${enDeadlinePhrase}. ${enrichedNotice.plainSummary.en}`,
+      kannadaText: `ದಾಖಲೆ '${enrichedNotice.titleKn || enrichedNotice.title}' ಯಶಸ್ವಿಯಾಗಿ ಪರಿಶೀಲಿಸಲಾಗಿದೆ. ${enrichedNotice.departmentKn || enrichedNotice.department} ನೀಡಿದ ಈ ನೋಟಿಸ್‌ಗೆ ${knDeadlinePhrase}. ${knPlain}`,
+      hindiText: `दस्तावेज '${enrichedNotice.titleHi || enrichedNotice.title}' का सफलतापूर्वक विश्लेषण किया गया। ${enrichedNotice.departmentHi || enrichedNotice.department} द्वारा जारी नोटिस की ${hiDeadlinePhrase}। ${hiPlain}`,
+      englishText: `Successfully analyzed the document '${enrichedNotice.titleEn || enrichedNotice.title}'. Issued by ${enrichedNotice.department}. ${enDeadlinePhrase}. ${enPlain}`,
       detectedLanguage: currentLang,
-      laymanSummary: enrichedNotice.laymanSummary?.en || (hasNoDueDate ? 'In plain words: No deadline is mentioned in this document. It is informational.' : isOverdue ? `In plain words: The statutory deadline passed on ${properDeadline}. Respond immediately to avoid additional penalties.` : `In plain words: The notice requires action by ${properDeadline}. Do not ignore it to prevent penalty charges.`),
+      selectedDisplayLang: currentLang,
+      laymanSummary: currentLang === 'kn' ? (enrichedNotice.laymanSummary?.kn || enrichedNotice.laymanSummary?.en) : currentLang === 'hi' ? (enrichedNotice.laymanSummary?.hi || enrichedNotice.laymanSummary?.en) : (enrichedNotice.laymanSummary?.en || enPlain),
       laymanSummaryKn: enrichedNotice.laymanSummary?.kn || (hasNoDueDate ? 'ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ದಾಖಲೆಯಲ್ಲಿ ಯಾವುದೇ ಅಂತಿಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಲಾಗಿಲ್ಲ. ಇದು ಮಾಹಿತಿ ಉದ್ದೇಶದ ದಾಖಲೆಯಾಗಿದೆ.' : isOverdue ? `ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ನೋಟಿಸ್‌ನ ಅಂತಿಮ ಗಡುವು ${properDeadlineKn} ರಂದು ಮೀರಿದೆ. ದಂಡ ತಪ್ಪಿಸಲು ತುರ್ತಾಗಿ ಉತ್ತರಿಸಿ.` : `ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ನೋಟಿಸ್‌ಗೆ ${properDeadlineKn} ರೊಳಗೆ ಉತ್ತರಿಸಬೇಕು. ಹೆಚ್ಚುವರಿ ದಂಡವನ್ನು ತಪ್ಪಿಸಲು ಸಕಾಲದಲ್ಲಿ ಕ್ರಮ ಕೈಗೊಳ್ಳಿ.`),
       laymanSummaryHi: enrichedNotice.laymanSummary?.hi || (hasNoDueDate ? 'साधारण शब्दों में: इस दस्तावेज में कोई देय तिथि उल्लिखित नहीं है। यह केवल एक सूचनात्मक रिकॉर्ड है।' : isOverdue ? `साधारण शब्दों में: इस नोटिस की देय तिथि ${properDeadlineHi} को समाप्त हो चुकी है। अतिरिक्त जुर्माने से बचने के लिए तुरंत जवाब दें।` : `साधारण शब्दों में: इस नोटिस का अनुपालन ${properDeadlineHi} तक करना आवश्यक है ताकि जुर्माने से बचा जा सके।`),
       laymanSummaryEn: enrichedNotice.laymanSummary?.en || (hasNoDueDate ? 'In plain words: No deadline is mentioned in this document. It is informational.' : isOverdue ? `In plain words: The statutory deadline passed on ${properDeadline}. Respond immediately to avoid additional penalties.` : `In plain words: The notice requires action by ${properDeadline}. Do not ignore it to prevent penalty charges.`),
-      keyPoints: enrichedNotice.keyPoints,
+      keyPoints: currentLang === 'kn' ? (enrichedNotice.keyPointsKn || enrichedNotice.keyPoints) : currentLang === 'hi' ? (enrichedNotice.keyPointsHi || enrichedNotice.keyPoints) : (enrichedNotice.keyPointsEn || enrichedNotice.keyPoints),
       keyPointsKn: enrichedNotice.keyPointsKn,
       keyPointsHi: enrichedNotice.keyPointsHi,
       keyPointsEn: enrichedNotice.keyPointsEn,
@@ -984,11 +996,15 @@ export default function App() {
             ? `Statutory due date passed on ${properDeadline} (${daysOverdue} days overdue)`
             : `Statutory deadline is ${properDeadline} (${daysRemaining} days remaining)`;
 
+          const knPlain = enrichedNotice.plainSummary?.kn || (typeof enrichedNotice.plainSummary === 'string' ? enrichedNotice.plainSummary : enrichedNotice.plainSummary?.en);
+          const hiPlain = enrichedNotice.plainSummary?.hi || (typeof enrichedNotice.plainSummary === 'string' ? enrichedNotice.plainSummary : enrichedNotice.plainSummary?.en);
+          const enPlain = enrichedNotice.plainSummary?.en || (typeof enrichedNotice.plainSummary === 'string' ? enrichedNotice.plainSummary : enrichedNotice.title);
+
           const primarySummary = currentLang === 'kn'
-            ? `ದಾಖಲೆ '${docTitle}' ಯಶಸ್ವಿಯಾಗಿ ಓದಲಾಗಿದೆ ಮತ್ತು ವಿಶ್ಲೇಷಿಸಲಾಗಿದೆ. ${docDept} ನೀಡಿದ ಈ ನೋಟಿಸ್‌ಗೆ ${knDeadlinePhrase}. ${enrichedNotice.plainSummary.kn || enrichedNotice.plainSummary.en}`
+            ? `ದಾಖಲೆ '${docTitle}' ಯಶಸ್ವಿಯಾಗಿ ಓದಲಾಗಿದೆ ಮತ್ತು ವಿಶ್ಲೇಷಿಸಲಾಗಿದೆ. ${docDept} ನೀಡಿದ ಈ ನೋಟಿಸ್‌ಗೆ ${knDeadlinePhrase}. ${knPlain}`
             : currentLang === 'hi'
-            ? `दस्तावेज '${docTitle}' का सफलतापूर्वक अध्ययन किया गया। ${docDept} द्वारा जारी इस नोटिस की ${hiDeadlinePhrase}। ${enrichedNotice.plainSummary.hi || enrichedNotice.plainSummary.en}`
-            : `Neatly analyzed document '${docTitle}'. Issued by ${docDept}. ${enDeadlinePhrase}. ${enrichedNotice.plainSummary.en}`;
+            ? `दस्तावेज '${docTitle}' का सफलतापूर्वक अध्ययन किया गया। ${docDept} द्वारा जारी इस नोटिस की ${hiDeadlinePhrase}। ${hiPlain}`
+            : `Neatly analyzed document '${docTitle}'. Issued by ${docDept}. ${enDeadlinePhrase}. ${enPlain}`;
 
           const isExpiring = !hasNoDueDate && !isOverdue && daysRemaining !== null && daysRemaining <= 7;
 
@@ -997,15 +1013,16 @@ export default function App() {
             type: 'assistant',
             timestamp: timeStr,
             text: primarySummary,
-            kannadaText: `ದಾಖಲೆ '${docTitle}' ಯಶಸ್ವಿಯಾಗಿ ಓದಲಾಗಿದೆ ಮತ್ತು ವಿಶ್ಲೇಷಿಸಲಾಗಿದೆ. ${docDept} ನೀಡಿದ ಈ ನೋಟಿಸ್‌ಗೆ ${knDeadlinePhrase}. ${enrichedNotice.plainSummary.kn || enrichedNotice.plainSummary.en}`,
-            hindiText: `दस्तावेज '${docTitle}' का सफलतापूर्वक अध्ययन किया गया। ${docDept} द्वारा जारी इस नोटिस की ${hiDeadlinePhrase}। ${enrichedNotice.plainSummary.hi || enrichedNotice.plainSummary.en}`,
-            englishText: `Neatly analyzed document '${docTitle}'. Issued by ${docDept}. ${enDeadlinePhrase}. ${enrichedNotice.plainSummary.en}`,
+            kannadaText: `ದಾಖಲೆ '${enrichedNotice.titleKn || enrichedNotice.title}' ಯಶಸ್ವಿಯಾಗಿ ಓದಲಾಗಿದೆ ಮತ್ತು ವಿಶ್ಲೇಷಿಸಲಾಗಿದೆ. ${enrichedNotice.departmentKn || enrichedNotice.department} ನೀಡಿದ ಈ ನೋಟಿಸ್‌ಗೆ ${knDeadlinePhrase}. ${knPlain}`,
+            hindiText: `दस्तावेज '${enrichedNotice.titleHi || enrichedNotice.title}' का सफलतापूर्वक अध्ययन किया गया। ${enrichedNotice.departmentHi || enrichedNotice.department} द्वारा जारी इस नोटिस की ${hiDeadlinePhrase}। ${hiPlain}`,
+            englishText: `Neatly analyzed document '${enrichedNotice.titleEn || enrichedNotice.title}'. Issued by ${enrichedNotice.department}. ${enDeadlinePhrase}. ${enPlain}`,
             detectedLanguage: currentLang,
-            laymanSummary: currentLang === 'kn' ? (enrichedNotice.laymanSummary?.kn || enrichedNotice.laymanSummary?.en) : currentLang === 'hi' ? (enrichedNotice.laymanSummary?.hi || enrichedNotice.laymanSummary?.en) : (enrichedNotice.laymanSummary?.en || enrichedNotice.plainSummary.en),
+            selectedDisplayLang: currentLang,
+            laymanSummary: currentLang === 'kn' ? (enrichedNotice.laymanSummary?.kn || enrichedNotice.laymanSummary?.en) : currentLang === 'hi' ? (enrichedNotice.laymanSummary?.hi || enrichedNotice.laymanSummary?.en) : (enrichedNotice.laymanSummary?.en || enPlain),
             laymanSummaryKn: enrichedNotice.laymanSummary?.kn || (hasNoDueDate ? 'ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ದಾಖಲೆಯಲ್ಲಿ ಯಾವುದೇ ಅಂತಿಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಲಾಗಿಲ್ಲ. ಇದು ಮಾಹಿತಿ ಉದ್ದೇಶದ ದಾಖಲೆಯಾಗಿದೆ.' : isOverdue ? `ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ನೋಟಿಸ್‌ನ ಅಂತಿಮ ಗಡುವು ${properDeadlineKn} ರಂದು ಮೀರಿದೆ. ದಂಡ ತಪ್ಪಿಸಲು ತುರ್ತಾಗಿ ಉತ್ತರಿಸಿ.` : `ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ನೋಟಿಸ್‌ಗೆ ${properDeadlineKn} ರೊಳಗೆ ಉತ್ತರಿಸಬೇಕು. ಹೆಚ್ಚುವರಿ ದಂಡವನ್ನು ತಪ್ಪಿಸಲು ಸಕಾಲದಲ್ಲಿ ಕ್ರಮ ಕೈಗೊಳ್ಳಿ.`),
             laymanSummaryHi: enrichedNotice.laymanSummary?.hi || (hasNoDueDate ? 'साधारण शब्दों में: इस दस्तावेज में कोई देय तिथि उल्लिखित नहीं है। यह केवल एक सूचनात्मक रिकॉर्ड है।' : isOverdue ? `साधारण शब्दों में: इस नोटिस की देय तिथि ${properDeadlineHi} को समाप्त हो चुकी है। अतिरिक्त जुर्माने से बचने के लिए तुरंत जवाब दें।` : `साधारण शब्दों में: इस नोटिस का अनुपालन ${properDeadlineHi} तक करना आवश्यक है ताकि जुर्माने से बचा जा सके।`),
             laymanSummaryEn: enrichedNotice.laymanSummary?.en || (hasNoDueDate ? 'In plain words: No deadline is mentioned in this document. It is informational.' : isOverdue ? `In plain words: The statutory deadline passed on ${properDeadline}. Respond immediately to avoid additional penalties.` : `In plain words: The notice requires action by ${properDeadline}. Do not ignore it to prevent penalty charges.`),
-            keyPoints: enrichedNotice.keyPoints,
+            keyPoints: currentLang === 'kn' ? (enrichedNotice.keyPointsKn || enrichedNotice.keyPoints) : currentLang === 'hi' ? (enrichedNotice.keyPointsHi || enrichedNotice.keyPoints) : (enrichedNotice.keyPointsEn || enrichedNotice.keyPoints),
             keyPointsKn: enrichedNotice.keyPointsKn,
             keyPointsHi: enrichedNotice.keyPointsHi,
             keyPointsEn: enrichedNotice.keyPointsEn,
@@ -1340,8 +1357,10 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Language Selection: Auto, Kannada, Hindi, English */}
+                {/* Device Permissions & Language Selection */}
                 <div className="flex flex-wrap items-center gap-2">
+                  <DevicePermissionsToggle compact language={currentLang} />
+
                   <div className="flex items-center bg-white border-2 border-[#1a1a1a] p-1 gap-1 text-xs font-['Space_Grotesk'] shadow-xs">
                     <span className="text-[10px] font-['Space_Mono'] font-bold uppercase text-[#4a4a4a] px-1">
                       {t.langSelectorLabel}

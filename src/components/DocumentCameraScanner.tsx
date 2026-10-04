@@ -177,7 +177,14 @@ export const DocumentCameraScanner: React.FC<DocumentCameraScannerProps> = ({
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Camera API is not supported on this browser/environment.');
+        setCameraError(
+          language === 'kn'
+            ? 'ಈ ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಕ್ಯಾಮೆರಾ ಬೆಂಬಲವಿಲ್ಲ. ಕೆಳಗಿನಿಂದ ಕಡತವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ ಅಥವಾ ಮಾದರಿ ನೋಟಿಸ್ ಆಯ್ಕೆಮಾಡಿ.'
+            : language === 'hi'
+            ? 'इस ब्राउज़र में कैमरा समर्थित नहीं है। कृपया नीचे से फाइल अपलोड करें या नमूना नोटिस चुनें।'
+            : 'Camera is not supported in this browser. Please upload a file or select a sample notice below.'
+        );
+        return;
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -193,15 +200,15 @@ export const DocumentCameraScanner: React.FC<DocumentCameraScannerProps> = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(e => console.warn('Video play error:', e));
+        videoRef.current.play().catch(e => console.warn('Video play notice:', e));
       }
     } catch (err: any) {
-      console.error('Camera access error:', err);
+      console.warn('Camera access unavailable or permission denied:', err.message || err);
       let message = language === 'kn'
-        ? 'ಕ್ಯಾಮೆರಾ ಪ್ರವೇಶಿಸಲು ಸಾಧ್ಯವಾಗುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು ಬ್ರೌಸರ್‌ನಲ್ಲಿ ಕ್ಯಾಮೆರಾ ಅನುಮತಿಸಿ.'
+        ? 'ಕ್ಯಾಮೆರಾ ಅನುಮತಿ ನಿರಾಕರಿಸಲಾಗಿದೆ ಅಥವಾ ಸಾಧನ ಲಭ್ಯವಿಲ್ಲ. ನೀವು ಕೆಳಗಿನಿಂದ ಕಡತವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಬಹುದು ಅಥವಾ ಮಾದರಿ ನೋಟಿಸ್ ಆಯ್ಕೆಮಾಡಬಹುದು.'
         : language === 'hi'
-        ? 'कैमरा शुरू नहीं हो सका। कृपया ब्राउज़र में कैमरा अनुमति दें।'
-        : 'Unable to access camera. Please allow camera permissions in your browser.';
+        ? 'कैमरा अनुमति अस्वीकृत है या डिवाइस उपलब्ध नहीं है। आप सीधे फाइल अपलोड कर सकते हैं या नमूना नोटिस चुन सकते हैं।'
+        : 'Camera access is denied or device is not available. You can upload a document or pick a sample notice below.';
       setCameraError(message);
     }
   };

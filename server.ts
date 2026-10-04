@@ -241,9 +241,64 @@ function evaluateNoticeDates(doc: any): any {
   return doc;
 }
 
+// Helper to ensure all fields match the user's selected language
+function applyNoticeLanguage(notice: any, language?: string): any {
+  const finalNotice = evaluateNoticeDates(notice);
+
+  // Normalize plainSummary
+  if (typeof finalNotice.plainSummary === 'string') {
+    const pStr = finalNotice.plainSummary;
+    finalNotice.plainSummary = {
+      en: pStr,
+      kn: finalNotice.plainSummaryKn || (language === 'kn' ? pStr : 'ದಾಖಲೆಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಪರಿಶೀಲಿಸಲಾಗಿದೆ.'),
+      hi: finalNotice.plainSummaryHi || (language === 'hi' ? pStr : 'दस्तावेज का सफलतापूर्वक विश्लेषण किया गया।')
+    };
+  }
+
+  // Normalize laymanSummary
+  if (typeof finalNotice.laymanSummary === 'string') {
+    const lStr = finalNotice.laymanSummary;
+    finalNotice.laymanSummary = {
+      en: lStr,
+      kn: finalNotice.laymanSummaryKn || (language === 'kn' ? lStr : 'ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ನೋಟಿಸ್ ಪರಿಶೀಲಿಸಿ ನಿಗದಿತ ಗಡುವಿನೊಳಗೆ ಉತ್ತರಿಸಿ.'),
+      hi: finalNotice.laymanSummaryHi || (language === 'hi' ? lStr : 'साधारण शब्दों में: इस नोटिस की समीक्षा करें और समय सीमा से पहले उत्तर दें।')
+    };
+  }
+
+  // Normalize requiredAction
+  if (typeof finalNotice.requiredAction === 'string') {
+    const rStr = finalNotice.requiredAction;
+    finalNotice.requiredAction = {
+      en: rStr,
+      kn: finalNotice.requiredActionKn || (language === 'kn' ? rStr : 'ದಾಖಲೆಯನ್ನು ಪರಿಶೀಲಿಸಿ ಅಗತ್ಯ ಕ್ರಮ ಕೈಗೊಳ್ಳಿ.'),
+      hi: finalNotice.requiredActionHi || (language === 'hi' ? rStr : 'दस्तावेज की समीक्षा करें और आवश्यक कार्रवाई करें।')
+    };
+  }
+
+  // Set primary fields strictly matching user language
+  if (language === 'kn') {
+    if (finalNotice.titleKn) finalNotice.title = finalNotice.titleKn;
+    if (finalNotice.departmentKn) finalNotice.department = finalNotice.departmentKn;
+    if (finalNotice.penaltyTextKn) finalNotice.penaltyText = finalNotice.penaltyTextKn;
+    if (finalNotice.keyPointsKn && finalNotice.keyPointsKn.length > 0) finalNotice.keyPoints = finalNotice.keyPointsKn;
+    if (finalNotice.statutoryRemedyKn) finalNotice.statutoryRemedy = finalNotice.statutoryRemedyKn;
+  } else if (language === 'hi') {
+    if (finalNotice.titleHi) finalNotice.title = finalNotice.titleHi;
+    if (finalNotice.departmentHi) finalNotice.department = finalNotice.departmentHi;
+    if (finalNotice.penaltyTextHi) finalNotice.penaltyText = finalNotice.penaltyTextHi;
+    if (finalNotice.keyPointsHi && finalNotice.keyPointsHi.length > 0) finalNotice.keyPoints = finalNotice.keyPointsHi;
+    if (finalNotice.statutoryRemedyHi) finalNotice.statutoryRemedy = finalNotice.statutoryRemedyHi;
+  } else {
+    if (finalNotice.keyPointsEn && finalNotice.keyPointsEn.length > 0) finalNotice.keyPoints = finalNotice.keyPointsEn;
+  }
+
+  return finalNotice;
+}
+
 // Intelligent forensic document analyzer & auto-detector
 function analyzeDocumentLocally(fileName: string, mimeType = 'image/jpeg', userLang = 'auto'): any {
   const lowerName = (fileName || '').toLowerCase();
+  let rawDoc: any = null;
 
   // OVERDUE NOTICE CHECK
   if (lowerName.includes('overdue') || lowerName.includes('expired') || lowerName.includes('disconnect') || lowerName.includes('disconnection')) {
@@ -314,7 +369,7 @@ function analyzeDocumentLocally(fileName: string, mimeType = 'image/jpeg', userL
       verifiedSection: 'Electricity Act Sec 56 (Overdue)',
       disputeAvailable: true
     };
-    return evaluateNoticeDates(overdueDoc);
+    return applyNoticeLanguage(overdueDoc, userLang);
   }
 
   // NO DUE DATE CIRCULAR / ADVISORY CHECK
@@ -668,7 +723,7 @@ function analyzeDocumentLocally(fileName: string, mimeType = 'image/jpeg', userL
   }
 
   // Authentic Default Statutory Document (Forensic auto-detection for arbitrary/camera uploaded docs)
-  return {
+  return applyNoticeLanguage({
     id: `DOC-STATUTORY-${Date.now()}`,
     refNumber: `STATUTORY-COMPLIANCE-NOTICE-${Date.now().toString().slice(-6)}`,
     title: 'Official Statutory Compliance & Verification Notice',
@@ -740,7 +795,7 @@ function analyzeDocumentLocally(fileName: string, mimeType = 'image/jpeg', userL
     statutoryRemedyHi: 'आधिकारिक पोर्टल के माध्यम से शिकायत या विवाद प्रस्तुत करना',
     verifiedSection: 'Statutory Verification Complete',
     disputeAvailable: true
-  };
+  }, userLang);
 }
 
 // POST /api/scan-document - Real Multimodal Document Understanding Endpoint
@@ -764,14 +819,16 @@ app.post('/api/scan-document', async (req, res) => {
 
     const scanSystemPrompt = `You are an expert document examiner and legal / civic analyst.
 The user has attached or scanned an official document, letter, notice, bill, or receipt (filename: "${fileName}").
+The user's currently selected language is: "${language.toUpperCase()}" (${language === 'kn' ? 'Kannada' : language === 'hi' ? 'Hindi' : 'English'}).
 READ THE ENTIRE FILE CAREFULLY AND NEATLY FROM TOP TO BOTTOM.
 DO NOT use the filename as the document title or heading.
 DO NOT invent generic placeholders like "IMAGE" or "DOCUMENT".
 Examine the exact text in the file and understand all key points present in it.
+IMPORTANT: You MUST generate all primary texts and translations in pure, fluent ${language === 'kn' ? 'Kannada (ಕನ್ನಡ)' : language === 'hi' ? 'Hindi (हिंदी)' : 'English'}, providing complete Kannada, Hindi, and English entries in all JSON fields.
 
 CRITICAL RULES FOR DUE DATES & EXPIRATION:
-1. IF DUE DATE IS NOT MENTIONED in the document: Set "deadlineDate": null, "daysRemaining": null, "hasNoDueDate": true, "isOverdue": false. DO NOT invent any due date. State clearly in the plain summary and layman's summary: "No due date or deadline is specified in this document." (and in Kannada/Hindi equivalents).
-2. IF DUE DATE HAS PASSED: (Today's date is October 4, 2026). If the deadline printed on the document is earlier than today, set "isOverdue": true, calculate exact "daysOverdue", set "daysRemaining" as a negative number, and explicitly state in the summaries: "⚠️ This document has passed its due date on [Proper Date] (Overdue by X days)."
+1. IF DUE DATE IS NOT MENTIONED in the document: Set "deadlineDate": null, "daysRemaining": null, "hasNoDueDate": true, "isOverdue": false. DO NOT invent any due date. State clearly in the plain summary and layman's summary: "No due date or deadline is specified in this document." (and in Kannada/Hindi equivalents: "ಯಾವುದೇ ಅಂತಿಮ ಗಡುವನ್ನು ನಮೂದಿಸಲಾಗಿಲ್ಲ (ಮಾಹಿತಿ ಉದ್ದೇಶದ ದಾಖಲೆ)" / "कोई देय तिथि उल्लिखित नहीं है (केवल सूचनात्मक दस्तावेज)").
+2. IF DUE DATE HAS PASSED: (Today's date is October 4, 2026). If the deadline printed on the document is earlier than today, set "isOverdue": true, calculate exact "daysOverdue", set "daysRemaining" as a negative number, and explicitly state in the summaries: "⚠️ This document has passed its due date on [Proper Date] (Overdue by X days)." (and in Kannada/Hindi equivalents).
 3. PROPER DATES: Always format dates cleanly (e.g., "October 15, 2026" or "March 24, 2025").
 
 Extract:
@@ -884,7 +941,8 @@ Respond in strictly valid JSON matching this schema:
                   text: `Please examine this uploaded document file carefully (filename: "${fileName}").
 Read the entire file neatly. Understand all key points, the exact document title, reference numbers, dates, deadlines, and amounts.
 Do NOT give a random heading or use the filename. Extract the genuine heading and key points present in the document.
-Generate a neat, accurate summary in Kannada, Hindi, and English.
+The user's currently selected language is: "${language.toUpperCase()}" (${language === 'kn' ? 'Kannada' : language === 'hi' ? 'Hindi' : 'English'}).
+Generate a rich, accurate summary, key points, layman summary, and required action in ${language === 'kn' ? 'pure Kannada (ಕನ್ನಡ)' : language === 'hi' ? 'pure Hindi (हिंदी)' : 'pure English'}, along with complete Kannada, Hindi, and English entries in all JSON schema fields.
 Return ONLY valid JSON matching the requested schema.`
                 }
               ]
@@ -911,18 +969,63 @@ Return ONLY valid JSON matching the requested schema.`
     const parsedNotice = JSON.parse(cleanJson);
     const finalNotice = evaluateNoticeDates(parsedNotice);
 
+    // Normalize plainSummary
+    if (typeof finalNotice.plainSummary === 'string') {
+      const pStr = finalNotice.plainSummary;
+      finalNotice.plainSummary = {
+        en: pStr,
+        kn: finalNotice.plainSummaryKn || (language === 'kn' ? pStr : 'ದಾಖಲೆಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಪರಿಶೀಲಿಸಲಾಗಿದೆ.'),
+        hi: finalNotice.plainSummaryHi || (language === 'hi' ? pStr : 'दस्तावेज का सफलतापूर्वक विश्लेषण किया गया।')
+      };
+    } else if (!finalNotice.plainSummary) {
+      finalNotice.plainSummary = {
+        en: finalNotice.title || 'Official Notice',
+        kn: finalNotice.titleKn || 'ಅಧಿಕೃತ ನೋಟಿಸ್',
+        hi: finalNotice.titleHi || 'आधिकारिक नोटिस'
+      };
+    }
+
+    // Normalize laymanSummary
+    if (typeof finalNotice.laymanSummary === 'string') {
+      const lStr = finalNotice.laymanSummary;
+      finalNotice.laymanSummary = {
+        en: lStr,
+        kn: finalNotice.laymanSummaryKn || (language === 'kn' ? lStr : 'ಸರಳ ಭಾಷೆಯಲ್ಲಿ: ಈ ನೋಟಿಸ್ ಪರಿಶೀಲಿಸಿ ನಿಗದಿತ ಗಡುವಿನೊಳಗೆ ಉತ್ತರಿಸಿ.'),
+        hi: finalNotice.laymanSummaryHi || (language === 'hi' ? lStr : 'साधारण शब्दों में: इस नोटिस की समीक्षा करें और समय सीमा से पहले उत्तर दें।')
+      };
+    }
+
+    // Normalize requiredAction
+    if (typeof finalNotice.requiredAction === 'string') {
+      const rStr = finalNotice.requiredAction;
+      finalNotice.requiredAction = {
+        en: rStr,
+        kn: finalNotice.requiredActionKn || (language === 'kn' ? rStr : 'ದಾಖಲೆಯನ್ನು ಪರಿಶೀಲಿಸಿ ಅಗತ್ಯ ಕ್ರಮ ಕೈಗೊಳ್ಳಿ.'),
+        hi: finalNotice.requiredActionHi || (language === 'hi' ? rStr : 'दस्तावेज की समीक्षा करें और आवश्यक कार्रवाई करें।')
+      };
+    }
+
+    // Set primary title & fields according to user's selected language
     if (language === 'kn') {
       if (finalNotice.titleKn) finalNotice.title = finalNotice.titleKn;
       if (finalNotice.departmentKn) finalNotice.department = finalNotice.departmentKn;
+      if (finalNotice.penaltyTextKn) finalNotice.penaltyText = finalNotice.penaltyTextKn;
+      if (finalNotice.keyPointsKn && finalNotice.keyPointsKn.length > 0) finalNotice.keyPoints = finalNotice.keyPointsKn;
+      if (finalNotice.statutoryRemedyKn) finalNotice.statutoryRemedy = finalNotice.statutoryRemedyKn;
     } else if (language === 'hi') {
       if (finalNotice.titleHi) finalNotice.title = finalNotice.titleHi;
       if (finalNotice.departmentHi) finalNotice.department = finalNotice.departmentHi;
+      if (finalNotice.penaltyTextHi) finalNotice.penaltyText = finalNotice.penaltyTextHi;
+      if (finalNotice.keyPointsHi && finalNotice.keyPointsHi.length > 0) finalNotice.keyPoints = finalNotice.keyPointsHi;
+      if (finalNotice.statutoryRemedyHi) finalNotice.statutoryRemedy = finalNotice.statutoryRemedyHi;
+    } else {
+      if (finalNotice.keyPointsEn && finalNotice.keyPointsEn.length > 0) finalNotice.keyPoints = finalNotice.keyPointsEn;
     }
 
     return res.json({ notice: finalNotice });
   } catch (err: any) {
     console.error('Scan document error:', err);
-    const fallbackNotice = analyzeDocumentLocally(req.body?.fileName || 'Document.pdf');
+    const fallbackNotice = analyzeDocumentLocally(req.body?.fileName || 'Document.pdf', req.body?.mimeType || 'image/jpeg', req.body?.language || 'en');
     return res.json({ notice: fallbackNotice });
   }
 });
